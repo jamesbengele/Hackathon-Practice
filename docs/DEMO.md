@@ -32,6 +32,7 @@ Use a separate organizer wallet: it receives every face-value sale, so if Alex w
 - [ ] A Solana Explorer tab open (devnet) so the first load isn't slow.
 - [ ] Backup screen recording of this script on the desktop, ready to play.
 - [ ] Hard-refresh all three windows once.
+- [ ] Dismiss any leftover toasts (×) so the screen is clean.
 
 ---
 
@@ -50,9 +51,9 @@ Speaker = Partner B. *Italics* are what you say. **Bold** is what you click.
 
 1. In the price box under the ticket, change **50** to **80**.
 2. Click **List for resale**.
-3. The red banner appears: **🚫 Blocked by the ticket itself.** *This rule is enforced onchain. No one can override it.* (Phantom never pops up, because the app simulates the transaction against the program first and the program says no.)
+3. The red banner shakes in: **🚫 Blocked by the ticket itself.** *This rule is enforced onchain. No one can override it.* With the UI polish (PR #2) it also says "You asked ~~$80~~. The most this ticket can ever sell for is $50." (Phantom never pops up, because the app simulates the transaction against the program first and the program says no.)
 
-> *"Alex can't go anymore and tries to flip it for eighty. On StubHub, that listing goes live. Here…"* — point at the banner — *"…the ticket refuses."*
+> *"Alex can't go anymore and tries to flip it for eighty. On StubHub, that listing goes live. Here…"* — point at the banner — *"…the ticket refuses. Fifty is the most it can ever sell for."*
 
 **Stop talking for two seconds.** Let the room read it.
 
@@ -67,10 +68,10 @@ Speaker = Partner B. *Italics* are what you say. **Bold** is what you click.
 ### 4 · Atomic resale (≈20s) — Jordan, right window
 
 1. In **Resale market**, click **Buy** on Alex's ticket → approve in Phantom.
-2. Toast: "Ticket #0 is yours. You paid $50 straight to the seller." Click **View on Solana Explorer ↗**.
-3. Point at the transaction: one transaction, SOL from Jordan to Alex, ticket owner changed. Back to the app: the ticket is now under Jordan's **My tickets** and gone from Alex's.
+2. **Right away**, point at Alex's window: a green **+$50** chip shows next to the wallet balance for about 5 seconds (with PR #2). Jordan's ticket flashes green as it lands in Jordan's **My tickets**, and it's gone from Alex's.
+3. Toast on Jordan's side: "Ticket #0 is yours. You paid $50 straight to the seller." Click **View on Solana Explorer ↗** and point at the transaction: one transaction, SOL from Jordan to Alex, ticket owner changed.
 
-> *"Jordan pays, Alex gets fifty dollars, and the ticket moves, all in one transaction. Both happen or neither does. Nobody can get scammed in between."*
+> *"Jordan pays, Alex gets fifty dollars"* — point at the +$50 — *", and the ticket moves, all in one transaction. Both happen or neither does. Nobody can get scammed in between."*
 
 ### 5 · Check in at the gate (≈20s) — Organizer window
 
