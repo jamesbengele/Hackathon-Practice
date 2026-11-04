@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
 
 // Solana Playground fills this in for you when you click Build.
-declare_id!("11111111111111111111111111111111");
+declare_id!("9gCTdqdJtobM3NxVt262EyfvcrAKmqy7NSaSwpRLRkg2");
 
 #[program]
 pub mod facevalue {

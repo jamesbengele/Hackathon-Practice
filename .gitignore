@@ -6,3 +6,5 @@ next-env.d.ts
 program/target/
 *-keypair.json
 *.keypair.json
+target/
+id.json
