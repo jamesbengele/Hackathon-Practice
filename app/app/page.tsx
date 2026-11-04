@@ -101,6 +101,18 @@ function App() {
     if (!publicKey) setBalance(null);
   }, [publicKey]);
 
+  // The top bar is sticky and can wrap on narrow windows; share its height so sticky banners sit just under it.
+  const topbarRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = topbarRef.current;
+    if (!el) return;
+    const set = () => document.documentElement.style.setProperty("--topbar-h", `${el.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const toast = (text: string, sig?: string) => {
     const id = Date.now() + Math.random();
     setToasts((t) => [...t, { id, text, sig }]);
@@ -174,7 +186,8 @@ function App() {
 
   return (
     <>
-      <header className="topbar">
+      <header className="topbar" ref={topbarRef}>
+        <div className="topbar-inner">
         <div className="brand">
           <span className="logo" aria-hidden>
             🎟️
@@ -199,6 +212,7 @@ function App() {
             </div>
           )}
           <WalletMultiButton />
+        </div>
         </div>
       </header>
 
@@ -231,9 +245,9 @@ function App() {
             )}
           </div>
         ) : (
-          <>
+          <div className="layout">
             {/* 1. Event card */}
-            <section className="card">
+            <section className="card hero">
               <p className="event-title">{EVENT_DISPLAY.title}</p>
               <p className="event-sub">{EVENT_DISPLAY.subtitle}</p>
               <div className="event-row">
@@ -274,6 +288,7 @@ function App() {
               </div>
             </section>
 
+            <div className="stack">
             {/* 2. My tickets */}
             <section className="card">
               <h2>
@@ -289,7 +304,8 @@ function App() {
               ) : mine.length === 0 ? (
                 <div className="empty">You don&apos;t have any tickets yet. Buy one above, or from the resale market.</div>
               ) : (
-                mine.map((t) => (
+                <div className="list">
+                {mine.map((t) => (
                   <MyTicketRow
                     key={t.publicKey.toBase58()}
                     t={t}
@@ -310,7 +326,8 @@ function App() {
                       )
                     }
                   />
-                ))
+                ))}
+                </div>
               )}
             </section>
 
@@ -327,7 +344,8 @@ function App() {
               {market.length === 0 ? (
                 <div className="empty">No tickets for resale right now.</div>
               ) : (
-                market.map((t) => {
+                <div className="list">
+                {market.map((t) => {
                   const own = !!publicKey && t.account.owner.equals(publicKey);
                   return (
                     <div className="row ticket" key={t.publicKey.toBase58()}>
@@ -366,12 +384,18 @@ function App() {
                       )}
                     </div>
                   );
-                })
+                })}
+                </div>
               )}
             </section>
 
+            </div>
+          </div>
+        )}
+        {isOrganizerView && (
+          <div className="org-grid">
             {/* Organizer: check-in */}
-            {isOrganizerView && (
+            {event && (
               <section className="card gray">
                 <h2>
                   Gate check-in <span className="org-tag">ORGANIZER</span>
@@ -425,9 +449,6 @@ function App() {
                 </p>
               </section>
             )}
-          </>
-        )}
-        {isOrganizerView && (
           <OrganizerPanel
             busy={busy}
             publicKey={publicKey}
@@ -441,8 +462,9 @@ function App() {
               })
             }
           />
+          </div>
         )}
-        <p className="hint" style={{ textAlign: "center" }}>
+        <p className="hint footnote">
           Running on Solana devnet. Make sure Phantom is set to <b>Devnet</b> (Settings → Developer settings → Testnet mode).
         </p>
       </main>
