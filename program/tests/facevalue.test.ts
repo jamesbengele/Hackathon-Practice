@@ -41,6 +41,12 @@ describe("facevalue", () => {
     await web3.sendAndConfirmTransaction(conn, tx, [organizer.keypair]);
   };
 
+  // shortcut: public devnet RPC can serve reads from a node that hasn't seen the last tx yet; wait before reading. Drop if using a dedicated RPC.
+  const settle = async () => {
+    const end = Date.now() + 2000; // no setTimeout in the Playground sandbox, so spin (no RPC calls)
+    while (Date.now() < end);
+  };
+
   const expectError = async (p: Promise<unknown>, name: string) => {
     try {
       await p;
@@ -64,18 +70,21 @@ describe("facevalue", () => {
         systemProgram: web3.SystemProgram.programId,
       })
       .signers([buyer])
-      .rpc();
+      .rpc()
+      .then(async (sig) => (await settle(), sig));
 
   const list = (owner: web3.Keypair, price: BN) =>
     program.methods
       .listTicket(price)
       .accountsStrict({ event: eventPda, ticket: ticketPda(0), owner: owner.publicKey })
       .signers([owner])
-      .rpc();
+      .rpc()
+      .then(async (sig) => (await settle(), sig));
 
   before(async () => {
     await fund(a.publicKey, 0.2);
     await fund(b.publicKey, 0.2);
+    await settle();
   });
 
   it("1. organizer creates an event", async () => {
@@ -87,6 +96,7 @@ describe("facevalue", () => {
         systemProgram: web3.SystemProgram.programId,
       })
       .rpc();
+    await settle();
     const ev = await program.account.event.fetch(eventPda);
     assert.ok(ev.organizer.equals(organizer.publicKey));
     assert.equal(ev.name, "OSU Student Section");
@@ -101,7 +111,8 @@ describe("facevalue", () => {
     const after = await conn.getBalance(organizer.publicKey);
     const t = await program.account.ticket.fetch(ticketPda(0));
     assert.ok(t.owner.equals(a.publicKey));
-    assert.equal(after - before, FACE.toNumber());
+    // organizer is also the fee payer here: 5000 lamports x 2 signatures (payer + buyer)
+    assert.equal(after - before, FACE.toNumber() - 10_000);
     assert.equal((await program.account.event.fetch(eventPda)).sold, 1);
   });
 
@@ -129,6 +140,7 @@ describe("facevalue", () => {
       })
       .signers([b])
       .rpc();
+    await settle();
     const after = await conn.getBalance(a.publicKey);
     const t = await program.account.ticket.fetch(ticketPda(0));
     assert.ok(t.owner.equals(b.publicKey));
@@ -145,6 +157,7 @@ describe("facevalue", () => {
       .checkIn()
       .accountsStrict({ event: eventPda, ticket: ticketPda(0), organizer: organizer.publicKey })
       .rpc();
+    await settle();
     const t = await program.account.ticket.fetch(ticketPda(0));
     assert.equal(t.used, true);
     await expectError(list(b, FACE), "TicketUsed");
