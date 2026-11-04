@@ -1,12 +1,14 @@
 "use client";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { LAMPORTS_PER_SOL, PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 import {
   EVENT_DISPLAY,
   EventAccount,
+  LAMPORTS_PER_DOLLAR,
   FaceValueTxError,
   PROGRAM_ID,
   TicketAccount,
@@ -32,7 +34,7 @@ const WalletMultiButton = dynamic(
 );
 
 type Toast = { id: number; text: string; sig?: string };
-type Banner = { kind: "blocked" | "error"; text: string } | null;
+type Banner = { kind: "blocked" | "error"; text: string; attempt?: string; n: number } | null;
 
 export default function Home() {
   if (!PROGRAM_ID) return <SetupScreen />;
@@ -42,6 +44,7 @@ export default function Home() {
 function App() {
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
+  const { setVisible: openWalletModal } = useWalletModal();
   const program = useMemo(() => getProgram(connection), [connection]);
 
   const [isOrganizerView, setIsOrganizerView] = useState(false);
@@ -53,6 +56,11 @@ function App() {
   const [banner, setBanner] = useState<Banner>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Short-lived highlights so the room can see what just changed.
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  const [delta, setDelta] = useState<{ lamports: number; n: number } | null>(null);
+  const prevMine = useRef<Set<string> | null>(null);
+  const prevBalance = useRef<number | null>(null);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -98,9 +106,14 @@ function App() {
   };
 
   /** Run one instruction: simulate → wallet signs → confirm → toast, or show a friendly banner. */
-  const run = async (label: string, success: string, build: () => Promise<TransactionInstruction>) => {
+  const run = async (
+    label: string,
+    success: string,
+    build: () => Promise<TransactionInstruction>,
+    attempt?: string
+  ) => {
     if (!publicKey) {
-      setBanner({ kind: "error", text: "Connect your Phantom wallet first (top right)." });
+      openWalletModal(true);
       return;
     }
     setBusy(label);
@@ -113,8 +126,9 @@ function App() {
     } catch (e) {
       const err = e instanceof FaceValueTxError ? e : parseError(e);
       if (err.logs.length) console.log("Program logs:\n" + err.logs.join("\n"));
-      if (err.code === "PriceAboveFace") setBanner({ kind: "blocked", text: err.message });
-      else if (err.code !== "Rejected") setBanner({ kind: "error", text: err.message });
+      const n = Date.now();
+      if (err.code === "PriceAboveFace") setBanner({ kind: "blocked", text: err.message, attempt, n });
+      else if (err.code !== "Rejected") setBanner({ kind: "error", text: err.message, n });
     } finally {
       setBusy(null);
     }
@@ -124,16 +138,58 @@ function App() {
   const market = tickets.filter((t) => t.account.listed && !t.account.used);
   const isOrganizer = !!(publicKey && event && event.account.organizer.equals(publicKey));
 
+  // Flash a ticket when it lands in "My tickets" (bought, or bought from someone else).
+  const mineKeys = mine.map((t) => t.publicKey.toBase58()).join(",");
+  useEffect(() => {
+    prevMine.current = null; // new wallet: don't flash every ticket it already has
+    prevBalance.current = null;
+  }, [publicKey]);
+  useEffect(() => {
+    if (events === null) return;
+    const now = new Set(mineKeys ? mineKeys.split(",") : []);
+    const before = prevMine.current;
+    prevMine.current = now;
+    if (!before) return;
+    const added = Array.from(now).filter((k) => !before.has(k));
+    if (!added.length) return;
+    setFresh((f) => new Set([...Array.from(f), ...added]));
+    setTimeout(() => setFresh((f) => new Set(Array.from(f).filter((k) => !added.includes(k)))), 4000);
+  }, [mineKeys, events]);
+
+  // Show "+$50" next to the balance when money arrives (e.g. the seller after a resale).
+  useEffect(() => {
+    if (balance === null) return;
+    const before = prevBalance.current;
+    prevBalance.current = balance;
+    if (before === null) return;
+    const diff = balance - before;
+    if (Math.abs(diff) < LAMPORTS_PER_DOLLAR / 2) return; // ignore fee dust
+    setDelta({ lamports: diff, n: Date.now() });
+    const t = setTimeout(() => setDelta(null), 5000);
+    return () => clearTimeout(t);
+  }, [balance]);
+
   return (
     <>
       <header className="topbar">
         <div className="brand">
-          FaceValue
-          <small>Student tickets that can never be resold above face value</small>
+          <span className="logo" aria-hidden>
+            🎟️
+          </span>
+          <div>
+            FaceValue <span className="net-pill">Devnet</span>
+            <small>Student tickets that can never be resold above face value</small>
+          </div>
         </div>
         <div className="wallet-area">
           {balance !== null && (
             <div className="balance">
+              {delta && (
+                <span key={delta.n} className={`delta ${delta.lamports > 0 ? "up" : "down"}`}>
+                  {delta.lamports > 0 ? "+" : "−"}
+                  {fmtDollars(Math.abs(delta.lamports))}
+                </span>
+              )}
               Wallet: <b>{(balance / LAMPORTS_PER_SOL).toFixed(3)} SOL</b>
               <br />
               <span style={{ opacity: 0.85 }}>≈ {fmtDollars(balance)} demo dollars</span>
@@ -144,7 +200,7 @@ function App() {
       </header>
 
       <main>
-        {banner && <BannerView banner={banner} face={event ? fmtDollars(event.account.facePrice) : "$50"} onClose={() => setBanner(null)} />}
+        {banner && <BannerView key={banner.n} banner={banner} face={event ? fmtDollars(event.account.facePrice) : "$50"} onClose={() => setBanner(null)} />}
         {loadError && (
           <div className="banner info">
             Couldn&apos;t reach Solana devnet right now: <code>{loadError}</code>. Retrying every few seconds.
@@ -153,7 +209,9 @@ function App() {
 
 
         {events === null ? (
-          <div className="card">Loading event from Solana devnet…</div>
+          <div className="card loading">
+            <span className="spin dark" /> Loading event from Solana devnet…
+          </div>
         ) : !event ? (
           <div className="card">
             <h2>No event yet</h2>
@@ -183,6 +241,9 @@ function App() {
                   </div>
                   <div className="sold">
                     {event.account.sold} of {event.account.maxSupply} sold
+                    {event.account.sold < event.account.maxSupply && (
+                      <> · {event.account.maxSupply - event.account.sold} left</>
+                    )}
                   </div>
                   <div className="bar">
                     <div style={{ width: `${(100 * event.account.sold) / event.account.maxSupply}%` }} />
@@ -197,24 +258,33 @@ function App() {
                     )
                   }
                 >
-                  {event.account.sold >= event.account.maxSupply
-                    ? "Sold out"
-                    : busy === "buy"
-                    ? "Buying…"
-                    : publicKey
-                    ? "Buy ticket"
-                    : "Connect wallet to buy"}
+                  {event.account.sold >= event.account.maxSupply ? (
+                    "Sold out"
+                  ) : busy === "buy" ? (
+                    <Busy>Buying…</Busy>
+                  ) : publicKey ? (
+                    "Buy ticket"
+                  ) : (
+                    "Connect wallet to buy"
+                  )}
                 </button>
               </div>
             </section>
 
             {/* 2. My tickets */}
             <section className="card">
-              <h2>My tickets</h2>
+              <h2>
+                My tickets {mine.length > 0 && <span className="count">{mine.length}</span>}
+              </h2>
               {!publicKey ? (
-                <div className="empty">Connect your wallet to see your tickets.</div>
+                <div className="empty">
+                  <button className="secondary" onClick={() => openWalletModal(true)}>
+                    Connect wallet
+                  </button>{" "}
+                  to see your tickets.
+                </div>
               ) : mine.length === 0 ? (
-                <div className="empty">You don&apos;t have any tickets yet.</div>
+                <div className="empty">You don&apos;t have any tickets yet. Buy one above, or from the resale market.</div>
               ) : (
                 mine.map((t) => (
                   <MyTicketRow
@@ -222,9 +292,13 @@ function App() {
                     t={t}
                     face={event.account.facePrice}
                     busy={busy}
+                    fresh={fresh.has(t.publicKey.toBase58())}
                     onList={(price) =>
-                      run(`list-${t.account.ticketId}`, `Ticket #${t.account.ticketId} listed for ${fmtDollars(price)}`, () =>
-                        ix.listTicket(program, publicKey, t, price)
+                      run(
+                        `list-${t.account.ticketId}`,
+                        `Ticket #${t.account.ticketId} listed for ${fmtDollars(price)}`,
+                        () => ix.listTicket(program, publicKey, t, price),
+                        fmtDollars(price)
                       )
                     }
                     onCancel={() =>
@@ -240,7 +314,9 @@ function App() {
             {/* 3. Resale market */}
             <section className="card gray">
               <div className="section-head">
-                <h2>Resale market</h2>
+                <h2>
+                  Resale market {market.length > 0 && <span className="count">{market.length}</span>}
+                </h2>
                 <span className="badge">
                   Face value: {fmtDollars(event.account.facePrice)} · Max resale: {fmtDollars(event.account.facePrice)}
                 </span>
@@ -251,9 +327,12 @@ function App() {
                 market.map((t) => {
                   const own = !!publicKey && t.account.owner.equals(publicKey);
                   return (
-                    <div className="row" key={t.publicKey.toBase58()}>
+                    <div className="row ticket" key={t.publicKey.toBase58()}>
                       <div className="tnum">Ticket #{t.account.ticketId}</div>
-                      <div style={{ fontSize: "1.3rem", fontWeight: 800 }}>{fmtDollars(t.account.askPrice)}</div>
+                      <div className="ask">
+                        {fmtDollars(t.account.askPrice)}
+                        {t.account.askPrice.eq(event.account.facePrice) && <small>at face</small>}
+                      </div>
                       <div className="muted">
                         Seller{" "}
                         <a href={explorerAddr(t.account.owner.toBase58())} target="_blank" rel="noreferrer">
@@ -273,7 +352,13 @@ function App() {
                             )
                           }
                         >
-                          {busy === `resale-${t.account.ticketId}` ? "Buying…" : publicKey ? "Buy" : "Connect to buy"}
+                          {busy === `resale-${t.account.ticketId}` ? (
+                            <Busy>Buying…</Busy>
+                          ) : publicKey ? (
+                            "Buy"
+                          ) : (
+                            "Connect to buy"
+                          )}
                         </button>
                       )}
                     </div>
@@ -298,7 +383,7 @@ function App() {
                   <div className="empty">No tickets sold yet.</div>
                 ) : (
                   tickets.map((t) => (
-                    <div className="row" key={t.publicKey.toBase58()}>
+                    <div className="row ticket" key={t.publicKey.toBase58()}>
                       <div className="tnum">
                         Ticket #{t.account.ticketId}
                         <StatusPill t={t.account} />
@@ -318,7 +403,13 @@ function App() {
                           )
                         }
                       >
-                        {t.account.used ? "Checked in" : busy === `checkin-${t.account.ticketId}` ? "Checking in…" : "Check in"}
+                        {t.account.used ? (
+                          "Checked in"
+                        ) : busy === `checkin-${t.account.ticketId}` ? (
+                          <Busy>Checking in…</Busy>
+                        ) : (
+                          "Check in"
+                        )}
                       </button>
                     </div>
                   ))
@@ -352,7 +443,14 @@ function App() {
 
       <div className="toasts">
         {toasts.map((t) => (
-          <div className="toast" key={t.id}>
+          <div className="toast" key={t.id} role="status">
+            <button
+              className="close"
+              aria-label="Dismiss"
+              onClick={() => setToasts((all) => all.filter((x) => x.id !== t.id))}
+            >
+              ×
+            </button>
             ✅ {t.text}
             {t.sig && (
               <>
@@ -369,6 +467,14 @@ function App() {
   );
 }
 
+function Busy({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <span className="spin" aria-hidden /> {children}
+    </>
+  );
+}
+
 function StatusPill({ t }: { t: TicketAccount }) {
   if (t.used) return <span className="pill used">Used</span>;
   if (t.listed) return <span className="pill listed">Listed</span>;
@@ -379,20 +485,23 @@ function MyTicketRow({
   t,
   face,
   busy,
+  fresh,
   onList,
   onCancel,
 }: {
   t: WithKey<TicketAccount>;
   face: BN;
   busy: string | null;
+  fresh: boolean;
   onList: (price: BN) => void;
   onCancel: () => void;
 }) {
   const [price, setPrice] = useState(String(toDollars(face)));
   const id = t.account.ticketId;
   const dollars = Number(price);
+  const canList = !busy && dollars > 0;
   return (
-    <div className="row">
+    <div className={`row ticket${fresh ? " fresh" : ""}`}>
       <div className="tnum">
         Ticket #{id}
         <StatusPill t={t.account} />
@@ -403,7 +512,7 @@ function MyTicketRow({
         <div className="actions">
           <span className="muted">Listed for {fmtDollars(t.account.askPrice)}</span>
           <button className="secondary" disabled={!!busy} onClick={onCancel}>
-            {busy === `cancel-${id}` ? "Cancelling…" : "Cancel listing"}
+            {busy === `cancel-${id}` ? <Busy>Cancelling…</Busy> : "Cancel listing"}
           </button>
         </div>
       ) : (
@@ -416,12 +525,13 @@ function MyTicketRow({
               step={1}
               value={price}
               onChange={(e) => setPrice(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && canList && onList(dollarsToLamports(dollars))}
               aria-label="Resale price in dollars"
             />
           </div>
           {/* No client-side cap check on purpose: the program is the one that says no. */}
-          <button disabled={!!busy || !(dollars > 0)} onClick={() => onList(dollarsToLamports(dollars))}>
-            {busy === `list-${id}` ? "Listing…" : "List for resale"}
+          <button disabled={!canList} onClick={() => onList(dollarsToLamports(dollars))}>
+            {busy === `list-${id}` ? <Busy>Listing…</Busy> : "List for resale"}
           </button>
         </div>
       )}
@@ -437,6 +547,11 @@ function BannerView({ banner, face, onClose }: { banner: NonNullable<Banner>; fa
           ×
         </button>
         <div className="big-line">🚫 Blocked by the ticket itself.</div>
+        {banner.attempt && (
+          <div className="attempt">
+            You asked <s>{banner.attempt}</s>. The most this ticket can ever sell for is <b>{face}</b>.
+          </div>
+        )}
         Resale price can&apos;t exceed face value ({face}).{" "}
         <i>This rule is enforced onchain. No one can override it.</i>
       </div>
@@ -490,7 +605,7 @@ function OrganizerPanel({
             onCreate(new BN(Date.now()), name, dollarsToLamports(Number(price)), Math.floor(Number(supply)))
           }
         >
-          {busy === "create" ? "Creating…" : "Create event"}
+          {busy === "create" ? <Busy>Creating…</Busy> : "Create event"}
         </button>
       </div>
       <p className="hint">
