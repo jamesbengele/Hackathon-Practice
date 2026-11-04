@@ -101,6 +101,20 @@ export async function fetchEvents(program: Program): Promise<WithKey<EventAccoun
   return all.sort((a, b) => b.account.eventId.cmp(a.account.eventId)); // newest first
 }
 
+// Address of the newest event, downloading only each event's 8-byte event_id so the call stays cheap.
+export async function fetchNewestEventKey(program: Program): Promise<PublicKey | null> {
+  const accs = await program.provider.connection.getProgramAccounts(PROGRAM_ID!, {
+    dataSlice: { offset: 40, length: 8 }, // event_id sits after the 8-byte discriminator and 32-byte organizer
+    filters: [{ dataSize: 101 }], // 8 + Event::INIT_SPACE; tickets are a different size
+  });
+  let newest: { key: PublicKey; id: bigint } | null = null;
+  for (const a of accs) {
+    const id = a.account.data.readBigUInt64LE(0);
+    if (!newest || id > newest.id) newest = { key: a.pubkey, id };
+  }
+  return newest?.key ?? null;
+}
+
 // One event by address via getAccountInfo, which the public devnet RPC rate-limits far less than getProgramAccounts.
 export async function fetchEvent(program: Program, address: PublicKey): Promise<WithKey<EventAccount>[]> {
   const account = (await (program.account as any).event.fetchNullable(address)) as EventAccount | null;
