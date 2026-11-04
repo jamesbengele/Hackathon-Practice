@@ -16,6 +16,8 @@ import {
   dollarsToLamports,
   explorerAddr,
   explorerTx,
+  eventPda,
+  fetchEvent,
   fetchEvents,
   fetchTickets,
   fmtDollars,
@@ -77,10 +79,10 @@ function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const evs = await fetchEvents(program);
+      const evs = eventParam ? await fetchEvent(program, new PublicKey(eventParam)) : await fetchEvents(program);
       setEvents(evs);
       const current = eventParam ? evs.find((e) => e.publicKey.toBase58() === eventParam) : evs[0];
-      setTickets(current ? await fetchTickets(program, current.publicKey) : []);
+      setTickets(current ? await fetchTickets(program, current) : []);
       if (publicKey) setBalance(await connection.getBalance(publicKey, "confirmed"));
       setLoadError(null);
     } catch (e: any) {
@@ -123,6 +125,7 @@ function App() {
       const sig = await sendIx(connection, publicKey, [instruction], sendTransaction);
       toast(success, sig);
       await refresh();
+      return true;
     } catch (e) {
       const err = e instanceof FaceValueTxError ? e : parseError(e);
       if (err.logs.length) console.log("Program logs:\n" + err.logs.join("\n"));
@@ -432,7 +435,10 @@ function App() {
             onCreate={(eventId, name, facePrice, maxSupply) =>
               run("create", `Event “${name}” created`, () =>
                 ix.createEvent(program, publicKey!, eventId, name, facePrice, maxSupply)
-              )
+              ).then((ok) => {
+                // Pin the new event so polling uses cheap lookups instead of the rate-limited "list all events" call.
+                if (ok) window.location.search = `?organizer=1&event=${eventPda(publicKey!, eventId).toBase58()}`;
+              })
             }
           />
         )}

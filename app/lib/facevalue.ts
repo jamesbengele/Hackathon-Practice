@@ -101,12 +101,17 @@ export async function fetchEvents(program: Program): Promise<WithKey<EventAccoun
   return all.sort((a, b) => b.account.eventId.cmp(a.account.eventId)); // newest first
 }
 
-export async function fetchTickets(program: Program, event: PublicKey): Promise<WithKey<TicketAccount>[]> {
-  // Ticket layout: 8-byte discriminator, then `event` pubkey.
-  const all = (await (program.account as any).ticket.all([
-    { memcmp: { offset: 8, bytes: event.toBase58() } },
-  ])) as WithKey<TicketAccount>[];
-  return all.sort((a, b) => a.account.ticketId - b.account.ticketId);
+// One event by address via getAccountInfo, which the public devnet RPC rate-limits far less than getProgramAccounts.
+export async function fetchEvent(program: Program, address: PublicKey): Promise<WithKey<EventAccount>[]> {
+  const account = (await (program.account as any).event.fetchNullable(address)) as EventAccount | null;
+  return account ? [{ publicKey: address, account }] : [];
+}
+
+export async function fetchTickets(program: Program, event: WithKey<EventAccount>): Promise<WithKey<TicketAccount>[]> {
+  // Tickets are PDAs numbered 0..sold-1, so one getMultipleAccounts call finds them all (no getProgramAccounts).
+  const keys = Array.from({ length: event.account.sold }, (_, i) => ticketPda(event.publicKey, i));
+  const accounts = (await (program.account as any).ticket.fetchMultiple(keys)) as (TicketAccount | null)[];
+  return keys.flatMap((publicKey, i) => (accounts[i] ? [{ publicKey, account: accounts[i]! }] : []));
 }
 
 // ---- Instruction builders (names and accounts frozen in SPEC §5) ----
