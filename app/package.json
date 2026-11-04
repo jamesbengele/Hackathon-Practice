@@ -1,0 +1,31 @@
+{
+  "name": "facevalue-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.30.1",
+    "@solana/wallet-adapter-base": "0.9.27",
+    "@solana/wallet-adapter-phantom": "0.9.28",
+    "@solana/wallet-adapter-react": "0.15.40",
+    "@solana/wallet-adapter-react-ui": "0.9.39",
+    "@solana/web3.js": "1.99.0",
+    "next": "14.2.35",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "20.16.5",
+    "@types/react": "18.3.5",
+    "@types/react-dom": "18.3.0",
+    "typescript": "5.5.4"
+  },
+  "overrides": {
+    "@types/react": "18.3.5",
+    "@types/react-dom": "18.3.0"
+  }
+}

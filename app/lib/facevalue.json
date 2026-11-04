@@ -1,0 +1,381 @@
+{
+  "address": "\"11111111111111111111111111111111\"",
+  "metadata": {
+    "name": "facevalue",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "create_event",
+      "docs": [
+        "1. Organizer creates an event."
+      ],
+      "discriminator": [
+        49,
+        219,
+        29,
+        203,
+        22,
+        98,
+        100,
+        87
+      ],
+      "accounts": [
+        {
+          "name": "event",
+          "writable": true
+        },
+        {
+          "name": "organizer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "event_id",
+          "type": "u64"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "face_price",
+          "type": "u64"
+        },
+        {
+          "name": "max_supply",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "buy_ticket",
+      "docs": [
+        "2. Buyer pays face price to the organizer and gets a new ticket."
+      ],
+      "discriminator": [
+        11,
+        24,
+        17,
+        193,
+        168,
+        116,
+        164,
+        169
+      ],
+      "accounts": [
+        {
+          "name": "event",
+          "writable": true
+        },
+        {
+          "name": "ticket",
+          "writable": true
+        },
+        {
+          "name": "organizer",
+          "writable": true
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "list_ticket",
+      "docs": [
+        "3. Owner lists a ticket for resale. THE CAP LIVES HERE."
+      ],
+      "discriminator": [
+        11,
+        213,
+        240,
+        45,
+        246,
+        35,
+        44,
+        162
+      ],
+      "accounts": [
+        {
+          "name": "event"
+        },
+        {
+          "name": "ticket",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "cancel_listing",
+      "docs": [
+        "4. Owner takes a ticket off the market."
+      ],
+      "discriminator": [
+        41,
+        183,
+        50,
+        232,
+        230,
+        233,
+        157,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "ticket",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "buy_resale",
+      "docs": [
+        "5. Buyer pays the seller and becomes the owner, in one atomic transaction."
+      ],
+      "discriminator": [
+        71,
+        230,
+        159,
+        123,
+        90,
+        231,
+        111,
+        104
+      ],
+      "accounts": [
+        {
+          "name": "event"
+        },
+        {
+          "name": "ticket",
+          "writable": true
+        },
+        {
+          "name": "seller",
+          "writable": true
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "check_in",
+      "docs": [
+        "6. Organizer marks a ticket as used at the gate."
+      ],
+      "discriminator": [
+        209,
+        253,
+        4,
+        217,
+        250,
+        241,
+        207,
+        50
+      ],
+      "accounts": [
+        {
+          "name": "event"
+        },
+        {
+          "name": "ticket",
+          "writable": true
+        },
+        {
+          "name": "organizer",
+          "signer": true
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Event",
+      "discriminator": [
+        125,
+        192,
+        125,
+        158,
+        9,
+        115,
+        152,
+        233
+      ]
+    },
+    {
+      "name": "Ticket",
+      "discriminator": [
+        41,
+        228,
+        24,
+        165,
+        78,
+        90,
+        235,
+        200
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "PriceAboveFace",
+      "msg": "Resale price can't be above face value"
+    },
+    {
+      "code": 6001,
+      "name": "SoldOut",
+      "msg": "This event is sold out"
+    },
+    {
+      "code": 6002,
+      "name": "NotOwner",
+      "msg": "You don't own this ticket"
+    },
+    {
+      "code": 6003,
+      "name": "NotOrganizer",
+      "msg": "Only the organizer can do this"
+    },
+    {
+      "code": 6004,
+      "name": "NotListed",
+      "msg": "This ticket isn't for sale"
+    },
+    {
+      "code": 6005,
+      "name": "TicketUsed",
+      "msg": "This ticket has already been used"
+    },
+    {
+      "code": 6006,
+      "name": "CannotBuyOwnTicket",
+      "msg": "You already own this ticket"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidPrice",
+      "msg": "Price must be greater than zero"
+    },
+    {
+      "code": 6008,
+      "name": "NameTooLong",
+      "msg": "Event name must be 32 characters or fewer"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidSupply",
+      "msg": "Max supply must be greater than zero"
+    }
+  ],
+  "types": [
+    {
+      "name": "Event",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "organizer",
+            "type": "pubkey"
+          },
+          {
+            "name": "event_id",
+            "type": "u64"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "face_price",
+            "type": "u64"
+          },
+          {
+            "name": "max_supply",
+            "type": "u32"
+          },
+          {
+            "name": "sold",
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Ticket",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "event",
+            "type": "pubkey"
+          },
+          {
+            "name": "ticket_id",
+            "type": "u32"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "listed",
+            "type": "bool"
+          },
+          {
+            "name": "ask_price",
+            "type": "u64"
+          },
+          {
+            "name": "used",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
