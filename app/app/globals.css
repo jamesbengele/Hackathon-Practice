@@ -28,10 +28,23 @@ a { color: var(--scarlet); }
   gap: 16px;
   flex-wrap: wrap;
 }
-.brand { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.5px; }
+.brand { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.5px; display: flex; align-items: center; gap: 12px; }
+.brand .logo { font-size: 2rem; line-height: 1; }
+.net-pill {
+  display: inline-block; vertical-align: middle; margin-left: 6px; padding: 2px 9px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+}
 .brand small { display: block; font-size: 0.8rem; font-weight: 500; opacity: 0.9; letter-spacing: 0; }
 .wallet-area { display: flex; align-items: center; gap: 14px; }
-.balance { font-size: 0.9rem; opacity: 0.95; text-align: right; }
+.balance { font-size: 0.9rem; opacity: 0.95; text-align: right; position: relative; }
+.delta {
+  position: absolute; right: 100%; top: 50%; margin-right: 12px; white-space: nowrap;
+  font-size: 1.3rem; font-weight: 800; padding: 4px 12px; border-radius: 999px; background: #fff;
+  animation: pop-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.3) both, fade-out 0.6s ease 4.4s forwards;
+  transform: translateY(-50%);
+}
+.delta.up { color: var(--green); }
+.delta.down { color: var(--scarlet); }
 
 main { max-width: 920px; margin: 0 auto; padding: 24px 16px 80px; }
 .card {
@@ -51,10 +64,12 @@ main { max-width: 920px; margin: 0 auto; padding: 24px 16px 80px; }
 .price small { font-size: 1rem; color: var(--gray); font-weight: 500; margin-left: 6px; }
 .sold { font-size: 1.1rem; color: var(--gray); }
 .bar { height: 10px; background: var(--gray-light); border-radius: 6px; overflow: hidden; margin-top: 6px; width: 240px; }
-.bar > div { height: 100%; background: var(--scarlet); }
+.bar > div { height: 100%; background: var(--scarlet); transition: width 0.6s ease; }
 
 button {
   font: inherit;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
   font-weight: 700;
   border: 0;
   border-radius: 10px;
@@ -64,27 +79,44 @@ button {
   color: #fff;
 }
 button:hover:not(:disabled) { background: var(--scarlet-dark); }
+button:active:not(:disabled) { transform: scale(0.97); }
+button:focus-visible, input:focus-visible { outline: 3px solid #ffb3b3; outline-offset: 2px; }
+button.big { box-shadow: 0 6px 18px rgba(187, 0, 0, 0.3); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 button.big { font-size: 1.3rem; padding: 18px 36px; }
 button.secondary { background: #fff; color: var(--ink); border: 2px solid var(--gray); }
 button.secondary:hover:not(:disabled) { background: var(--gray-light); }
 button.dark { background: var(--ink); }
+button.dark:hover:not(:disabled) { background: #000; }
 
 .row {
   display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
   padding: 14px 0; border-bottom: 1px solid var(--gray-light);
 }
 .row:last-child { border-bottom: 0; }
+/* Ticket rows look like ticket stubs: perforated left edge, light fill. */
+.row.ticket {
+  border: 2px dashed var(--gray-light); border-left: 6px solid var(--scarlet); border-radius: 12px;
+  padding: 14px 18px; margin-bottom: 10px; background: #fff;
+}
+.row.ticket:last-child { border-bottom: 2px dashed var(--gray-light); margin-bottom: 0; }
+.card.gray .row.ticket { border-left-color: var(--gray); }
+.row.ticket.fresh { animation: flash 2.5s ease; border-left-color: var(--green); }
+.ask { font-size: 1.4rem; font-weight: 800; }
+.ask small { font-size: 0.75rem; font-weight: 700; color: var(--green); background: #e6f4ea; padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle; }
+.count { display: inline-block; min-width: 1.6em; text-align: center; font-size: 0.85rem; padding: 2px 8px; border-radius: 999px; background: var(--gray-light); color: var(--ink); vertical-align: middle; margin-left: 6px; }
 .tnum { font-size: 1.2rem; font-weight: 800; min-width: 110px; }
 .actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .muted { color: var(--gray); }
-.empty { color: var(--gray); padding: 8px 0; }
+.empty { color: var(--gray); padding: 8px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.loading { display: flex; align-items: center; gap: 12px; color: var(--gray); }
 
 .pill { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 0.85rem; font-weight: 700; margin-left: 8px; }
 .pill.owned { background: #e6f4ea; color: var(--green); }
 .pill.listed { background: #fff3cd; color: #7a5a00; }
 .pill.used { background: var(--gray-light); color: var(--gray); }
 
+.dollar-input:focus-within { border-color: var(--scarlet); }
 .dollar-input { display: flex; align-items: center; border: 2px solid var(--gray); border-radius: 10px; background: #fff; overflow: hidden; }
 .dollar-input span { padding: 0 4px 0 12px; font-weight: 700; color: var(--gray); }
 .dollar-input input { font: inherit; font-weight: 700; border: 0; outline: 0; width: 90px; padding: 10px 10px 10px 2px; }
@@ -101,12 +133,17 @@ button.dark { background: var(--ink); }
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
   border: 3px solid var(--scarlet); background: #fff0f0; color: #5c0000;
 }
-.banner.blocked { font-size: 1.15rem; }
+.banner.blocked { font-size: 1.15rem; animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+.banner .attempt { font-size: 1.2rem; margin: 6px 0 8px; color: var(--ink); }
+.banner .attempt s { color: var(--scarlet); font-weight: 800; text-decoration-thickness: 3px; }
 .banner .big-line { font-size: 1.45rem; font-weight: 800; margin-bottom: 4px; color: var(--scarlet); }
 .banner.info { border-color: var(--gray); background: #fff; color: var(--ink); }
 .banner .close { position: absolute; top: 8px; right: 10px; background: transparent; color: inherit; padding: 4px 10px; font-size: 1.2rem; }
 
 .toasts { position: fixed; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 10px; z-index: 50; max-width: 380px; }
+.toast { position: relative; padding-right: 40px !important; animation: slide-in 0.3s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.toast .close { position: absolute; top: 6px; right: 6px; background: transparent; color: #fff; padding: 2px 8px; font-size: 1.1rem; opacity: 0.7; }
+.toast .close:hover:not(:disabled) { background: rgba(255, 255, 255, 0.15); opacity: 1; }
 .toast { background: var(--ink); color: #fff; border-radius: 12px; padding: 14px 18px; box-shadow: 0 6px 20px rgba(0,0,0,0.25); border-left: 6px solid #3ccf6e; }
 .toast a { color: #ffd6d6; font-weight: 700; }
 
@@ -119,3 +156,34 @@ code { background: var(--gray-light); padding: 2px 6px; border-radius: 6px; font
 
 .wallet-adapter-button { font-size: 1rem !important; height: 46px !important; border-radius: 10px !important; }
 .wallet-adapter-button-trigger { background: #fff !important; color: var(--scarlet) !important; }
+
+/* Spinner shown inside busy buttons while Phantom / devnet works. */
+.spin {
+  width: 1em; height: 1em; border-radius: 50%; display: inline-block; flex: none;
+  border: 3px solid rgba(255, 255, 255, 0.35); border-top-color: #fff; animation: spin 0.8s linear infinite;
+}
+.spin.dark { border-color: var(--gray-light); border-top-color: var(--scarlet); }
+button.secondary .spin { border-color: var(--gray-light); border-top-color: var(--ink); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-8px); }
+  40%, 60% { transform: translateX(8px); }
+}
+@keyframes slide-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(-50%) scale(0.6); } to { opacity: 1; transform: translateY(-50%) scale(1); } }
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes flash { 0%, 40% { background: #e6f4ea; } 100% { background: #fff; } }
+
+@media (max-width: 640px) {
+  .topbar { padding: 12px 16px; }
+  .card { padding: 18px; }
+  .event-row > button.big { width: 100%; }
+  .bar { width: 100%; }
+  .delta { position: static; transform: none; margin: 0 8px 0 0; animation: fade-out 0.6s ease 4.4s forwards; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
