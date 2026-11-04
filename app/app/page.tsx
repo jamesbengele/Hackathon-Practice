@@ -19,6 +19,7 @@ import {
   eventPda,
   fetchEvent,
   fetchEvents,
+  fetchNewestEventKey,
   fetchTickets,
   fmtDollars,
   getProgram,
@@ -96,6 +97,19 @@ function App() {
     const t = setInterval(refresh, 4000);
     return () => clearInterval(t);
   }, [refresh]);
+
+  // A window pinned with ?event= never lists other events, so check now and then whether a newer one exists.
+  const [newerEvent, setNewerEvent] = useState<string | null>(null);
+  useEffect(() => {
+    if (!eventParam) return;
+    const check = () =>
+      fetchNewestEventKey(program)
+        .then((k) => setNewerEvent(k && k.toBase58() !== eventParam ? k.toBase58() : null))
+        .catch(() => {}); // best effort; the main poll already reports RPC errors
+    check();
+    const t = setInterval(check, 30000);
+    return () => clearInterval(t);
+  }, [program, eventParam]);
 
   useEffect(() => {
     if (!publicKey) setBalance(null);
@@ -223,6 +237,12 @@ function App() {
             Couldn&apos;t reach Solana devnet right now: <code>{loadError}</code>. Retrying every few seconds.
           </div>
         )}
+        {newerEvent && (
+          <div className="banner info">
+            A newer event exists.{" "}
+            <a href={`?${isOrganizerView ? "organizer=1&" : ""}event=${newerEvent}`}>Switch to it</a>
+          </div>
+        )}
 
 
         {events === null ? (
@@ -248,7 +268,7 @@ function App() {
           <div className="layout">
             {/* 1. Event card */}
             <section className="card hero">
-              <p className="event-title">{EVENT_DISPLAY.title}</p>
+              <p className="event-title">{event.account.name}</p>
               <p className="event-sub">{EVENT_DISPLAY.subtitle}</p>
               <div className="event-row">
                 <div>
