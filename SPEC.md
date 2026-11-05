@@ -148,7 +148,7 @@ SOL transfers use `system_program::transfer` via CPI. The buyer is the signer, s
 
 Every successful transaction shows a toast with a **"View on Solana Explorer"** link (`?cluster=devnet`).
 
-**Look and feel:** OSU scarlet and gray, big buttons, readable from the back of the room (base font ≥18px on the demo laptop). No logins, no polish beyond that.
+**Look and feel:** dark and premium, with one vibrant violet → pink → amber gradient (no OSU scarlet and gray), big buttons, readable from the back of the room (base font ≥18px on the demo laptop). No logins, no polish beyond that.
 
 **Simple-to-use test (from the judging criteria):** a classmate should be able to buy and resell a ticket without us explaining anything.
 
