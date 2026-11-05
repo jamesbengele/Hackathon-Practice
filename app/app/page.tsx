@@ -81,9 +81,11 @@ function App() {
   const refresh = useCallback(async () => {
     try {
       const evs = eventParam ? await fetchEvent(program, new PublicKey(eventParam)) : await fetchEvents(program);
-      setEvents(evs);
       const current = eventParam ? evs.find((e) => e.publicKey.toBase58() === eventParam) : evs[0];
-      setTickets(current ? await fetchTickets(program, current) : []);
+      const tix = current ? await fetchTickets(program, current) : [];
+      // Set both together, so tickets you already own don't flash as "new" on page load.
+      setEvents(evs);
+      setTickets(tix);
       if (publicKey) setBalance(await connection.getBalance(publicKey, "confirmed"));
       setLoadError(null);
     } catch (e: any) {
@@ -203,9 +205,7 @@ function App() {
       <header className="topbar" ref={topbarRef}>
         <div className="topbar-inner">
         <div className="brand">
-          <span className="logo" aria-hidden>
-            🎟️
-          </span>
+          <Logo />
           <div>
             FaceValue <span className="net-pill">Devnet</span>
             <small>Student tickets that can never be resold above face value</small>
@@ -222,7 +222,7 @@ function App() {
               )}
               Wallet: <b>{(balance / LAMPORTS_PER_SOL).toFixed(3)} SOL</b>
               <br />
-              <span style={{ opacity: 0.85 }}>≈ {fmtDollars(balance)} demo dollars</span>
+              <span className="sub">≈ {fmtDollars(balance)} demo dollars</span>
             </div>
           )}
           <WalletMultiButton />
@@ -268,43 +268,54 @@ function App() {
           <div className="layout">
             {/* 1. Event card */}
             <section className="card hero">
-              <p className="event-title">{event.account.name}</p>
-              <p className="event-sub">{EVENT_DISPLAY.subtitle}</p>
-              <div className="event-row">
-                <div>
-                  <div className="price">
-                    {fmtDollars(event.account.facePrice)}
-                    <small>face value</small>
-                  </div>
-                  <div className="sold">
-                    {event.account.sold} of {event.account.maxSupply} sold
-                    {event.account.sold < event.account.maxSupply && (
-                      <> · {event.account.maxSupply - event.account.sold} left</>
-                    )}
-                  </div>
-                  <div className="bar">
-                    <div style={{ width: `${(100 * event.account.sold) / event.account.maxSupply}%` }} />
-                  </div>
+              <div className="hero-art">
+                <Guilloche />
+                <div className="hero-top">
+                  <span className="admit">Admit one</span>
+                  <span className="serial">No. {short(event.publicKey)}</span>
                 </div>
-                <button
-                  className="big"
-                  disabled={!!busy || event.account.sold >= event.account.maxSupply}
-                  onClick={() =>
-                    run("buy", `You bought a ticket for ${fmtDollars(event.account.facePrice)}`, () =>
-                      ix.buyTicket(program, publicKey!, event)
-                    )
-                  }
-                >
-                  {event.account.sold >= event.account.maxSupply ? (
-                    "Sold out"
-                  ) : busy === "buy" ? (
-                    <Busy>Buying…</Busy>
-                  ) : publicKey ? (
-                    "Buy ticket"
-                  ) : (
-                    "Connect wallet to buy"
-                  )}
-                </button>
+                <div>
+                  <p className="event-title">{event.account.name}</p>
+                  <p className="event-sub">{EVENT_DISPLAY.subtitle}</p>
+                </div>
+              </div>
+              <div className="hero-body">
+                <div className="event-row">
+                  <div>
+                    <div className="price">
+                      {fmtDollars(event.account.facePrice)}
+                      <small>face value</small>
+                    </div>
+                    <div className="sold">
+                      {event.account.sold} of {event.account.maxSupply} sold
+                      {event.account.sold < event.account.maxSupply && (
+                        <> · {event.account.maxSupply - event.account.sold} left</>
+                      )}
+                    </div>
+                    <div className="bar">
+                      <div style={{ width: `${(100 * event.account.sold) / event.account.maxSupply}%` }} />
+                    </div>
+                  </div>
+                  <button
+                    className="big"
+                    disabled={!!busy || event.account.sold >= event.account.maxSupply}
+                    onClick={() =>
+                      run("buy", `You bought a ticket for ${fmtDollars(event.account.facePrice)}`, () =>
+                        ix.buyTicket(program, publicKey!, event)
+                      )
+                    }
+                  >
+                    {event.account.sold >= event.account.maxSupply ? (
+                      "Sold out"
+                    ) : busy === "buy" ? (
+                      <Busy>Buying…</Busy>
+                    ) : publicKey ? (
+                      "Buy ticket"
+                    ) : (
+                      "Connect wallet to buy"
+                    )}
+                  </button>
+                </div>
               </div>
             </section>
 
@@ -358,6 +369,7 @@ function App() {
                   Resale market {market.length > 0 && <span className="count">{market.length}</span>}
                 </h2>
                 <span className="badge">
+                  <ShieldIcon />
                   Face value: {fmtDollars(event.account.facePrice)} · Max resale: {fmtDollars(event.account.facePrice)}
                 </span>
               </div>
@@ -376,7 +388,7 @@ function App() {
                       </div>
                       <div className="muted">
                         Seller{" "}
-                        <a href={explorerAddr(t.account.owner.toBase58())} target="_blank" rel="noreferrer">
+                        <a className="addr" href={explorerAddr(t.account.owner.toBase58())} target="_blank" rel="noreferrer">
                           {short(t.account.owner)}
                         </a>
                       </div>
@@ -437,12 +449,12 @@ function App() {
                       </div>
                       <div className="muted">
                         Owner{" "}
-                        <a href={explorerAddr(t.account.owner.toBase58())} target="_blank" rel="noreferrer">
+                        <a className="addr" href={explorerAddr(t.account.owner.toBase58())} target="_blank" rel="noreferrer">
                           {short(t.account.owner)}
                         </a>
                       </div>
                       <button
-                        className="dark"
+                        className={t.account.used ? "dark done" : "dark"}
                         disabled={!!busy || t.account.used}
                         onClick={() =>
                           run(`checkin-${t.account.ticketId}`, `Ticket #${t.account.ticketId} checked in`, () =>
@@ -499,15 +511,17 @@ function App() {
             >
               ×
             </button>
-            ✅ {t.text}
-            {t.sig && (
-              <>
-                <br />
+            <span className="toast-icon">
+              <CheckIcon />
+            </span>
+            <div className="toast-body">
+              {t.text}
+              {t.sig && (
                 <a href={explorerTx(t.sig)} target="_blank" rel="noreferrer">
                   View on Solana Explorer ↗
                 </a>
-              </>
-            )}
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -594,14 +608,22 @@ function BannerView({ banner, face, onClose }: { banner: NonNullable<Banner>; fa
         <button className="close" onClick={onClose} aria-label="Dismiss">
           ×
         </button>
-        <div className="big-line">🚫 Blocked by the ticket itself.</div>
-        {banner.attempt && (
-          <div className="attempt">
-            You asked <s>{banner.attempt}</s>. The most this ticket can ever sell for is <b>{face}</b>.
+        {/* A crisp drawn version of the 🚫 from the demo script. */}
+        <span className="banner-icon">
+          <BanIcon />
+        </span>
+        <div className="banner-body">
+          <div className="big-line">Blocked by the ticket itself.</div>
+          {banner.attempt && (
+            <div className="attempt">
+              You asked <s>{banner.attempt}</s>. The most this ticket can ever sell for is <b>{face}</b>.
+            </div>
+          )}
+          <div className="rule">
+            Resale price can&apos;t exceed face value ({face}).{" "}
+            <i>This rule is enforced onchain. No one can override it.</i>
           </div>
-        )}
-        Resale price can&apos;t exceed face value ({face}).{" "}
-        <i>This rule is enforced onchain. No one can override it.</i>
+        </div>
       </div>
     );
   return (
@@ -609,8 +631,107 @@ function BannerView({ banner, face, onClose }: { banner: NonNullable<Banner>; fa
       <button className="close" onClick={onClose} aria-label="Dismiss">
         ×
       </button>
-      <b>{banner.text}</b>
+      <span className="banner-icon small">
+        <AlertIcon />
+      </span>
+      <div className="banner-body">
+        <b>{banner.text}</b>
+      </div>
     </div>
+  );
+}
+
+/* ---------- Brand and icons (inline SVG, so they stay sharp on a projector) ---------- */
+
+function Logo() {
+  return (
+    <span className="logo" aria-hidden>
+      <svg viewBox="0 0 40 40" fill="none">
+        <defs>
+          <linearGradient id="fv-logo-fill" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#6A5CFF" />
+            <stop offset="0.42" stopColor="#A64DFF" />
+            <stop offset="0.78" stopColor="#F0479E" />
+            <stop offset="1" stopColor="#FF9A3C" />
+          </linearGradient>
+          {/* A ticket with two notches and a perforation, cut out of white. */}
+          <mask id="fv-logo-ticket" maskUnits="userSpaceOnUse" x="0" y="0" width="40" height="40">
+            <rect x="8.5" y="13" width="23" height="14" rx="3" fill="#fff" />
+            <circle cx="8.5" cy="20" r="2.7" fill="#000" />
+            <circle cx="31.5" cy="20" r="2.7" fill="#000" />
+            <path d="M25 14.6v10.8" stroke="#000" strokeWidth="1.5" strokeDasharray="1.7 1.5" />
+          </mask>
+        </defs>
+        <rect width="40" height="40" rx="12" fill="url(#fv-logo-fill)" />
+        <rect x="0.75" y="0.75" width="38.5" height="38.5" rx="11.25" stroke="#fff" strokeOpacity="0.28" strokeWidth="1.5" />
+        <g transform="rotate(-12 20 20)">
+          <rect x="8.5" y="13" width="23" height="14" rx="3" fill="#fff" mask="url(#fv-logo-ticket)" />
+        </g>
+      </svg>
+    </span>
+  );
+}
+
+// Overlapping ellipses and circles: the rosette pattern printed on banknotes and premium tickets.
+const ROSETTE_ELLIPSES = Array.from({ length: 36 }, (_, i) => i * 5);
+const ROSETTE_CIRCLES = Array.from({ length: 24 }, (_, i) => (i / 24) * 2 * Math.PI);
+function Guilloche() {
+  return (
+    <svg className="guilloche" viewBox="-200 -200 400 400" aria-hidden>
+      <g fill="none" strokeWidth="0.8">
+        {ROSETTE_ELLIPSES.map((deg) => (
+          <ellipse key={`e${deg}`} rx="192" ry="62" transform={`rotate(${deg})`} />
+        ))}
+        {ROSETTE_CIRCLES.map((t, i) => (
+          <circle key={`c${i}`} cx={(Math.cos(t) * 64).toFixed(2)} cy={(Math.sin(t) * 64).toFixed(2)} r="118" />
+        ))}
+      </g>
+    </svg>
+  );
+}
+
+const iconProps = {
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  "aria-hidden": true,
+};
+
+function BanIcon() {
+  return (
+    <svg {...iconProps} strokeWidth={2.6}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M6 6l12 12" />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg {...iconProps} strokeWidth={2.4}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.8v5" />
+      <path d="M12 16.3h.01" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg {...iconProps} strokeWidth={3}>
+      <path d="M5.5 12.5l4.2 4.2L18.5 8" />
+    </svg>
+  );
+}
+
+function ShieldIcon() {
+  return (
+    <svg {...iconProps} strokeWidth={2}>
+      <path d="M12 3l7.5 3v5.6c0 4.5-3.1 8.2-7.5 9.4-4.4-1.2-7.5-4.9-7.5-9.4V6L12 3z" />
+      <path d="M8.8 12.1l2.3 2.3 4.2-4.5" />
+    </svg>
   );
 }
 
