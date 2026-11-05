@@ -81,6 +81,20 @@ describe("facevalue", () => {
       .rpc()
       .then(async (sig) => (await settle(), sig));
 
+  const buyResale = (seller: web3.PublicKey, maxPrice: BN) =>
+    program.methods
+      .buyResale(maxPrice)
+      .accountsStrict({
+        event: eventPda,
+        ticket: ticketPda(0),
+        seller,
+        buyer: b.publicKey,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .signers([b])
+      .rpc()
+      .then(async (sig) => (await settle(), sig));
+
   before(async () => {
     await fund(a.publicKey, 0.2);
     await fund(b.publicKey, 0.2);
@@ -127,20 +141,13 @@ describe("facevalue", () => {
     assert.ok(t.askPrice.eq(FACE));
   });
 
-  it("5. B buys the resale -> B owns it, A gets paid, all in one tx", async () => {
+  it("5. B can't pay itself or be overcharged, then buys the resale -> B owns it, A gets paid, all in one tx", async () => {
+    // Naming your own wallet as the seller would mean a free ticket.
+    await expectError(buyResale(b.publicKey, FACE), "NotOwner");
+    // The ask is above the price B saw, as if A raised it in the meantime.
+    await expectError(buyResale(a.publicKey, FACE.subn(1)), "PriceChanged");
     const before = await conn.getBalance(a.publicKey);
-    await program.methods
-      .buyResale()
-      .accountsStrict({
-        event: eventPda,
-        ticket: ticketPda(0),
-        seller: a.publicKey,
-        buyer: b.publicKey,
-        systemProgram: web3.SystemProgram.programId,
-      })
-      .signers([b])
-      .rpc();
-    await settle();
+    await buyResale(a.publicKey, FACE);
     const after = await conn.getBalance(a.publicKey);
     const t = await program.account.ticket.fetch(ticketPda(0));
     assert.ok(t.owner.equals(b.publicKey));
@@ -152,7 +159,15 @@ describe("facevalue", () => {
     await expectError(list(a, FACE), "NotOwner");
   });
 
-  it("7. organizer checks in B's ticket; B tries to list -> TicketUsed", async () => {
+  it("7. A can't check in; organizer checks in B's ticket; B tries to list -> TicketUsed", async () => {
+    await expectError(
+      program.methods
+        .checkIn()
+        .accountsStrict({ event: eventPda, ticket: ticketPda(0), organizer: a.publicKey })
+        .signers([a])
+        .rpc(),
+      "NotOrganizer"
+    );
     await program.methods
       .checkIn()
       .accountsStrict({ event: eventPda, ticket: ticketPda(0), organizer: organizer.publicKey })

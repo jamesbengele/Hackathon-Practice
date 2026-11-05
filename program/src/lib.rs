@@ -35,8 +35,8 @@ pub mod facevalue {
 
     /// 2. Buyer pays face price to the organizer and gets a new ticket.
     pub fn buy_ticket(ctx: Context<BuyTicket>) -> Result<()> {
+        // SoldOut is checked by the `event` account constraint in BuyTicket.
         let event = &mut ctx.accounts.event;
-        require!(event.sold < event.max_supply, FaceValueError::SoldOut);
 
         transfer(
             CpiContext::new(
@@ -86,7 +86,8 @@ pub mod facevalue {
     }
 
     /// 5. Buyer pays the seller and becomes the owner, in one atomic transaction.
-    pub fn buy_resale(ctx: Context<BuyResale>) -> Result<()> {
+    /// `max_price` is the price the buyer saw, so a seller who relists higher meanwhile can't charge more.
+    pub fn buy_resale(ctx: Context<BuyResale>, max_price: u64) -> Result<()> {
         let ticket = &mut ctx.accounts.ticket;
         require!(ticket.listed, FaceValueError::NotListed);
         require!(!ticket.used, FaceValueError::TicketUsed);
@@ -101,6 +102,7 @@ pub mod facevalue {
             ticket.ask_price <= ctx.accounts.event.face_price,
             FaceValueError::PriceAboveFace
         );
+        require!(ticket.ask_price <= max_price, FaceValueError::PriceChanged);
 
         transfer(
             CpiContext::new(
@@ -266,4 +268,6 @@ pub enum FaceValueError {
     NameTooLong,
     #[msg("Max supply must be greater than zero")]
     InvalidSupply,
+    #[msg("The seller raised the price. Check the new price and try again")]
+    PriceChanged,
 }

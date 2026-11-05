@@ -10,6 +10,7 @@ import {
   EventAccount,
   LAMPORTS_PER_DOLLAR,
   FaceValueTxError,
+  ORGANIZER,
   PROGRAM_ID,
   TicketAccount,
   WithKey,
@@ -18,7 +19,6 @@ import {
   explorerTx,
   eventPda,
   fetchEvent,
-  fetchEvents,
   fetchNewestEventKey,
   fetchTickets,
   fmtDollars,
@@ -51,8 +51,8 @@ function App() {
   const program = useMemo(() => getProgram(connection), [connection]);
 
   const [isOrganizerView, setIsOrganizerView] = useState(false);
-  const [eventParam, setEventParam] = useState<string | null>(null);
-  const [events, setEvents] = useState<WithKey<EventAccount>[] | null>(null);
+  const [eventParam, setEventParam] = useState<string | null | undefined>(undefined); // undefined until the URL is read
+  const [event, setEvent] = useState<WithKey<EventAccount> | null | undefined>(undefined); // undefined while loading
   const [tickets, setTickets] = useState<WithKey<TicketAccount>[]>([]);
   const [balance, setBalance] = useState<number | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -71,25 +71,40 @@ function App() {
     setEventParam(q.get("event"));
   }, []);
 
-  // Which event are we showing? ?event=<address> wins, otherwise the newest event.
-  const event = useMemo(() => {
-    if (!events) return null;
-    if (eventParam) return events.find((e) => e.publicKey.toBase58() === eventParam) ?? null;
-    return events[0] ?? null;
-  }, [events, eventParam]);
+  // Without ?event= we show the newest event. Finding it is the rate-limited "list all events" call, so it reruns
+  // only every 30 s (every poll while there's no event yet); the polls in between read the known address.
+  const newest = useRef<{ key: PublicKey | null; at: number } | null>(null);
+  // Polls can overlap when the RPC is slow; an older one that lands late must not overwrite newer data.
+  const sentSeq = useRef(0);
+  const shownSeq = useRef(0);
 
+  // Which event are we showing? ?event=<address> wins, otherwise the newest event.
   const refresh = useCallback(async () => {
+    if (eventParam === undefined) return; // URL not read yet
+    const seq = ++sentSeq.current;
     try {
-      const evs = eventParam ? await fetchEvent(program, new PublicKey(eventParam)) : await fetchEvents(program);
-      const current = eventParam ? evs.find((e) => e.publicKey.toBase58() === eventParam) : evs[0];
-      const tix = current ? await fetchTickets(program, current) : [];
-      // Set both together, so tickets you already own don't flash as "new" on page load.
-      setEvents(evs);
+      let key: PublicKey | null = null;
+      if (eventParam) {
+        try {
+          key = new PublicKey(eventParam);
+        } catch {} // not an address: shows "No event found"
+      } else {
+        if (!newest.current?.key || Date.now() - newest.current.at > 30000)
+          newest.current = { key: await fetchNewestEventKey(program), at: Date.now() };
+        key = newest.current.key;
+      }
+      const ev = key ? await fetchEvent(program, key) : null;
+      const tix = ev ? await fetchTickets(program, ev) : [];
+      const bal = publicKey ? await connection.getBalance(publicKey, "confirmed") : null;
+      if (seq < shownSeq.current) return;
+      shownSeq.current = seq;
+      // Set together, so tickets you already own don't flash as "new" on page load.
+      setEvent(ev);
       setTickets(tix);
-      if (publicKey) setBalance(await connection.getBalance(publicKey, "confirmed"));
+      setBalance(bal);
       setLoadError(null);
     } catch (e: any) {
-      setLoadError(String(e?.message ?? e));
+      if (seq > shownSeq.current) setLoadError(String(e?.message ?? e));
     }
   }, [program, eventParam, publicKey, connection]);
 
@@ -176,7 +191,7 @@ function App() {
     prevBalance.current = null;
   }, [publicKey]);
   useEffect(() => {
-    if (events === null) return;
+    if (event === undefined) return;
     const now = new Set(mineKeys ? mineKeys.split(",") : []);
     const before = prevMine.current;
     prevMine.current = now;
@@ -185,7 +200,7 @@ function App() {
     if (!added.length) return;
     setFresh((f) => new Set([...Array.from(f), ...added]));
     setTimeout(() => setFresh((f) => new Set(Array.from(f).filter((k) => !added.includes(k)))), 4000);
-  }, [mineKeys, events]);
+  }, [mineKeys, event]);
 
   // Show "+$50" next to the balance when money arrives (e.g. the seller after a resale).
   useEffect(() => {
@@ -245,7 +260,7 @@ function App() {
         )}
 
 
-        {events === null ? (
+        {event === undefined ? (
           <div className="card loading">
             <span className="spin dark" /> Loading event from Solana devnet…
           </div>
@@ -300,8 +315,11 @@ function App() {
                     className="big"
                     disabled={!!busy || event.account.sold >= event.account.maxSupply}
                     onClick={() =>
-                      run("buy", `You bought a ticket for ${fmtDollars(event.account.facePrice)}`, () =>
-                        ix.buyTicket(program, publicKey!, event)
+                      run(
+                        "buy",
+                        `You bought a ticket for ${fmtDollars(event.account.facePrice)} (plus a small Solana fee to store it)`,
+                        // The new ticket's address comes from `sold`, so read it fresh instead of from the last poll.
+                        async () => ix.buyTicket(program, publicKey!, (await fetchEvent(program, event.publicKey)) ?? event)
                       )
                     }
                   >
@@ -484,7 +502,7 @@ function App() {
           <OrganizerPanel
             busy={busy}
             publicKey={publicKey}
-            event={event}
+            event={event ?? null}
             onCreate={(eventId, name, facePrice, maxSupply) =>
               run("create", `Event “${name}” created`, () =>
                 ix.createEvent(program, publicKey!, eventId, name, facePrice, maxSupply)
@@ -781,7 +799,10 @@ function OrganizerPanel({
         {publicKey ? (
           <>
             The connected wallet ({short(publicKey)}) becomes the organizer and receives every face-value sale. $50 = 0.05
-            devnet SOL. The page always shows the newest event.
+            devnet SOL.{" "}
+            {ORGANIZER && !publicKey.equals(ORGANIZER)
+              ? `This page only shows events from ${short(ORGANIZER)} (set in app/lib/config.ts), so connect that wallet first.`
+              : "The page always shows the newest event."}
           </>
         ) : (
           "Connect the organizer wallet first."

@@ -191,7 +191,12 @@
           "name": "system_program"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "max_price",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "check_in",
@@ -302,6 +307,11 @@
       "code": 6009,
       "name": "InvalidSupply",
       "msg": "Max supply must be greater than zero"
+    },
+    {
+      "code": 6010,
+      "name": "PriceChanged",
+      "msg": "The seller raised the price. Check the new price and try again"
     }
   ],
   "types": [
