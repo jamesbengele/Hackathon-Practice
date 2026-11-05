@@ -5,13 +5,12 @@ import {
   Keypair,
   PublicKey,
   SystemProgram,
-  Transaction,
   TransactionInstruction,
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
 import idlJson from "./facevalue.json";
-import { DEVNET_RPC_URL, PROGRAM_ID_STRING } from "./config";
+import { DEVNET_RPC_URL, ORGANIZER_STRING, PROGRAM_ID_STRING } from "./config";
 
 // lib/config.ts is the normal place to set these; env vars override it if you prefer.
 export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || DEVNET_RPC_URL;
@@ -25,16 +24,22 @@ export const PROGRAM_ID: PublicKey | null = (() => {
   }
 })();
 
+// No try/catch on purpose: a typo here should stop the app, not quietly show everyone's events.
+export const ORGANIZER: PublicKey | null = ORGANIZER_STRING.trim() ? new PublicKey(ORGANIZER_STRING.trim()) : null;
+
 // ---- Offchain display data (SPEC §4) ----
 export const EVENT_DISPLAY = {
-  title: "OSU Student Section — Saturday Game",
   subtitle: "Ohio Stadium · Saturday, 12:00 PM",
 };
 // Demo display rate only: 1 SOL = $1,000, so $1 = 1,000,000 lamports.
 export const LAMPORTS_PER_DOLLAR = 1_000_000;
 export const toDollars = (lamports: number | BN) =>
-  Math.round((typeof lamports === "number" ? lamports : lamports.toNumber()) / LAMPORTS_PER_DOLLAR);
-export const fmtDollars = (lamports: number | BN) => `$${toDollars(lamports).toLocaleString()}`;
+  (typeof lamports === "number" ? lamports : lamports.toNumber()) / LAMPORTS_PER_DOLLAR;
+// Cents only when there are some ("$50", "$50.40"), so a price just above face never reads as "$50".
+export const fmtDollars = (lamports: number | BN) => {
+  const d = Math.round(toDollars(lamports) * 100) / 100;
+  return `$${d.toLocaleString("en-US", { minimumFractionDigits: Number.isInteger(d) ? 0 : 2, maximumFractionDigits: 2 })}`;
+};
 export const dollarsToLamports = (d: number) => new BN(Math.round(d * LAMPORTS_PER_DOLLAR));
 
 export const explorerTx = (sig: string) => `https://explorer.solana.com/tx/${sig}?cluster=devnet`;
@@ -96,16 +101,14 @@ export const ticketPda = (event: PublicKey, ticketId: number) =>
     PROGRAM_ID!
   )[0];
 
-export async function fetchEvents(program: Program): Promise<WithKey<EventAccount>[]> {
-  const all = (await (program.account as any).event.all()) as WithKey<EventAccount>[];
-  return all.sort((a, b) => b.account.eventId.cmp(a.account.eventId)); // newest first
-}
-
-// Address of the newest event, downloading only each event's 8-byte event_id so the call stays cheap.
+// Address of the organizer's newest event, downloading only each event's 8-byte event_id so the call stays cheap.
 export async function fetchNewestEventKey(program: Program): Promise<PublicKey | null> {
   const accs = await program.provider.connection.getProgramAccounts(PROGRAM_ID!, {
     dataSlice: { offset: 40, length: 8 }, // event_id sits after the 8-byte discriminator and 32-byte organizer
-    filters: [{ dataSize: 101 }], // 8 + Event::INIT_SPACE; tickets are a different size
+    filters: [
+      { dataSize: 101 }, // 8 + Event::INIT_SPACE; tickets are a different size
+      ...(ORGANIZER ? [{ memcmp: { offset: 8, bytes: ORGANIZER.toBase58() } }] : []), // organizer sits right after the discriminator
+    ],
   });
   let newest: { key: PublicKey; id: bigint } | null = null;
   for (const a of accs) {
@@ -116,9 +119,10 @@ export async function fetchNewestEventKey(program: Program): Promise<PublicKey |
 }
 
 // One event by address via getAccountInfo, which the public devnet RPC rate-limits far less than getProgramAccounts.
-export async function fetchEvent(program: Program, address: PublicKey): Promise<WithKey<EventAccount>[]> {
+export async function fetchEvent(program: Program, address: PublicKey): Promise<WithKey<EventAccount> | null> {
   const account = (await (program.account as any).event.fetchNullable(address)) as EventAccount | null;
-  return account ? [{ publicKey: address, account }] : [];
+  if (!account || (ORGANIZER && !account.organizer.equals(ORGANIZER))) return null; // a shared link to a stranger's event shows nothing
+  return { publicKey: address, account };
 }
 
 export async function fetchTickets(program: Program, event: WithKey<EventAccount>): Promise<WithKey<TicketAccount>[]> {
@@ -163,9 +167,10 @@ export const ix = {
       .accountsStrict({ ticket: ticket.publicKey, owner })
       .instruction() as Promise<TransactionInstruction>,
 
+  // The price the buyer saw is the most they pay (a program deployed before max_price existed ignores it).
   buyResale: (p: Program, buyer: PublicKey, ticket: WithKey<TicketAccount>) =>
     m(p)
-      .buyResale()
+      .buyResale(ticket.account.askPrice)
       .accountsStrict({
         event: ticket.account.event,
         ticket: ticket.publicKey,
@@ -206,6 +211,9 @@ export function parseError(e: any, logs: string[] = [], rawErr?: any): FaceValue
   if (anchorErr) {
     const { code, number } = anchorErr.error.errorCode;
     const known = IDL_ERRORS.find((x) => x.code === number);
+    // buy_ticket's address comes from `sold`, so this means another buyer got that ticket number first.
+    if (code === "ConstraintSeeds")
+      return new FaceValueTxError(code, "Someone else just bought that ticket. Please try again.", allLogs);
     return new FaceValueTxError(code, known?.msg ?? anchorErr.error.errorMessage, allLogs);
   }
 
@@ -271,5 +279,3 @@ export async function sendIx(
   }
   throw new FaceValueTxError("Timeout", "Still waiting for devnet to confirm. Check Explorer, then refresh.");
 }
-
-export { Transaction };

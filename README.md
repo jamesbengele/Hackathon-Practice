@@ -30,7 +30,7 @@ Needs Node.js 20 or newer (https://nodejs.org, LTS installer).
 
 ```powershell
 cd "C:\Users\James b\Documents\Hackathon Practice\app"
-notepad lib\config.ts       # paste the Program ID between the quotes, save
+notepad lib\config.ts       # paste the Program ID and the organizer wallet between the quotes, save
 npm install
 npm run dev
 ```
@@ -42,11 +42,13 @@ so you don't need to export anything from Playground.
 
 1. Phantom: Settings → Developer settings → **Testnet mode** on, network **Solana Devnet**.
    Do this in both Chrome profiles (Alex and Jordan). Fund each with ≥1 devnet SOL tonight.
-2. Create the event: open http://localhost:3000/?organizer=1, connect the **organizer** wallet,
-   click **Create event** (defaults: $50 face, 100 tickets). The organizer receives every
-   face-value sale, so use a third wallet if you want Alex's balance change to be clean.
-3. The main page always shows the newest event. To pin a specific one, add `?event=<event address>`
-   (shown at the bottom of the organizer view).
+2. Create the event: open http://localhost:3000/?organizer=1, connect the **organizer** wallet
+   (the one in `ORGANIZER_STRING`, `lib/config.ts`), click **Create event** (defaults: $50 face,
+   100 tickets). The organizer receives every face-value sale, so use a third wallet if you want
+   Alex's balance change to be clean. The page only shows events from that wallet, so nobody else
+   (including the Playground test runs) can put their event on it.
+3. The main page shows the organizer's newest event and checks for a newer one every 30 seconds.
+   To pin a specific one, add `?event=<event address>` (shown at the bottom of the organizer view).
 
 Demo flow: Alex **Buy ticket** → list at **$80** → red "Blocked by the ticket itself" banner →
 list at **$50** → Jordan **Buy** in the Resale market → `?organizer=1` → **Check in**.
@@ -62,6 +64,7 @@ list at **$50** → Jordan **Buy** in the Resale market → `?organizer=1` → *
 
 ## If you change the program
 
-Account fields and instruction names are frozen in SPEC §5. If you do change them, regenerate
+Build and deploy again from Playground: it upgrades the same Program ID, and existing events and
+tickets keep working as long as the account fields stay the same. Account fields and instruction names are frozen in SPEC §5. If you do change them, regenerate
 the IDL and copy it to both `idl/facevalue.json` and `app/lib/facevalue.json`. The frontend uses
 `@coral-xyz/anchor` 0.30.1, which needs the **new** IDL format (with `discriminator` fields).

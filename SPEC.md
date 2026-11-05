@@ -90,7 +90,7 @@ pub struct Ticket {
 | 2 | `buy_ticket()` | buyer | Pays `face_price` buyer → organizer, creates Ticket with `owner = buyer`, `sold += 1` | `sold == max_supply` → `SoldOut` |
 | 3 | `list_ticket(price)` | ticket owner | Sets `listed = true`, `ask_price = price` | **`price > face_price` → `PriceAboveFace`** · signer ≠ owner → `NotOwner` · `used` → `TicketUsed` · `price == 0` → `InvalidPrice` |
 | 4 | `cancel_listing()` | ticket owner | Sets `listed = false`, `ask_price = 0` | signer ≠ owner → `NotOwner` |
-| 5 | `buy_resale()` | buyer | **Atomically:** pays `ask_price` buyer → seller, sets `owner = buyer`, `listed = false`, `ask_price = 0` | not listed → `NotListed` · buyer == owner → `CannotBuyOwnTicket` · `used` → `TicketUsed` · seller account ≠ `ticket.owner` → `NotOwner` |
+| 5 | `buy_resale(max_price)` | buyer | **Atomically:** pays `ask_price` buyer → seller, sets `owner = buyer`, `listed = false`, `ask_price = 0` | not listed → `NotListed` · buyer == owner → `CannotBuyOwnTicket` · `used` → `TicketUsed` · seller account ≠ `ticket.owner` → `NotOwner` · `ask_price > max_price` (seller raised the price after the buyer saw it) → `PriceChanged` |
 | 6 | `check_in()` | organizer | Sets `used = true`, `listed = false` | signer ≠ `event.organizer` → `NotOrganizer` · already used → `TicketUsed` |
 
 **The cap (the one line this whole project is about):**
@@ -113,6 +113,9 @@ pub enum FaceValueError {
     #[msg("This ticket has already been used")]      TicketUsed,
     #[msg("You already own this ticket")]            CannotBuyOwnTicket,
     #[msg("Price must be greater than zero")]        InvalidPrice,
+    #[msg("Event name must be 32 characters or fewer")] NameTooLong,
+    #[msg("Max supply must be greater than zero")]   InvalidSupply,
+    #[msg("The seller raised the price. Check the new price and try again")] PriceChanged,
 }
 ```
 
@@ -124,9 +127,9 @@ SOL transfers use `system_program::transfer` via CPI. The buyer is the signer, s
 2. Wallet A buys ticket → A owns ticket, organizer balance +0.05 SOL, `sold == 1`
 3. **A lists at 0.08 SOL → fails with `PriceAboveFace`** ← most important test
 4. A lists at 0.05 SOL → `listed == true`
-5. Wallet B buys resale → B owns ticket, A balance +0.05 SOL, `listed == false`
+5. B names its own wallet as seller → `NotOwner`; B offers less than the ask → `PriceChanged`; B buys resale → B owns ticket, A balance +0.05 SOL, `listed == false`
 6. A (no longer owner) tries to list → fails with `NotOwner`
-7. Organizer checks in B's ticket → `used == true`; B tries to list → `TicketUsed`
+7. A tries to check in → `NotOrganizer`; organizer checks in B's ticket → `used == true`; B tries to list → `TicketUsed`
 8. Buy past `max_supply` → `SoldOut`
 
 ---
